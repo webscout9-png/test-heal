@@ -1,0 +1,50 @@
+{
+  "name": "@test-heal/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server that gives AI coding agents reliable root-cause diagnosis and minimal-fix capabilities for failing tests",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "test-heal": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "coding-agents",
+    "test-fix",
+    "claude-code",
+    "cursor",
+    "debugging",
+    "root-cause"
+  ],
+  "author": "TestHeal Contributors",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.0",
+    "zod-to-json-schema": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/webscout9-png/test-heal.git"
+  },
+  "homepage": "https://github.com/webscout9-png/test-heal#readme",
+  "bugs": {
+    "url": "https://github.com/webscout9-png/test-heal/issues"
+  }
+}

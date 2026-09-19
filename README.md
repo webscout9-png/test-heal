@@ -8,13 +8,16 @@ Gives Claude Code, Cursor, Gemini CLI, OpenCode and others a disciplined protoco
 
 ## Easiest ways to connect (pick one)
 
-### 1. Claude Code — one command (easiest)
+### 1. Claude Code — one command
 
 ```bash
 claude mcp add test-heal -- npx -y github:webscout9-png/test-heal
 ```
 
-That's it. Restart the session or run `/mcp` to verify.
+Verify:
+```bash
+claude mcp list
+```
 
 Remove later:
 ```bash
@@ -25,24 +28,15 @@ claude mcp remove test-heal
 
 ### 2. Any agent — one command with `add-mcp`
 
-Works with Claude Code, Cursor, OpenCode, VS Code, Cline, and many more:
-
 ```bash
 npx add-mcp github:webscout9-png/test-heal -y
 ```
 
-Or target a specific agent:
-```bash
-npx add-mcp github:webscout9-png/test-heal -a cursor -y
-npx add-mcp github:webscout9-png/test-heal -a claude-code -y
-```
-
 ---
 
-### 3. Cursor — one-click style
+### 3. Cursor — paste this config
 
-**Option A (recommended)**  
-Create or edit `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project) and paste:
+Put in `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project):
 
 ```json
 {
@@ -55,14 +49,11 @@ Create or edit `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project) and pas
 }
 ```
 
-Restart Cursor. Done.
-
-**Option B**  
-Cursor Settings → MCP → Add new MCP server → use the same command/args above.
+Restart Cursor.
 
 ---
 
-### 4. From source (if you prefer)
+### 4. From source
 
 ```bash
 git clone https://github.com/webscout9-png/test-heal.git
@@ -71,13 +62,13 @@ npm install
 npm run build
 ```
 
-Then point any agent at:
+Then:
 ```json
 {
   "mcpServers": {
     "test-heal": {
       "command": "node",
-      "args": ["/absolute/path/to/test-heal/dist/index.js"]
+      "args": ["/absolute/path/to/test-heal/bin/run.js"]
     }
   }
 }
@@ -85,53 +76,27 @@ Then point any agent at:
 
 ---
 
-## What you get after connecting
+## What was fixed (v0.3.3)
 
-Three tools the agent can call:
+**Root cause of connection failures:**  
+The package `bin` pointed at `dist/index.js`, but `dist/` is not committed to the repo. When agents ran `npx github:webscout9-png/test-heal`, the entry file was missing and the server failed to start.
+
+**Fix:**  
+A small pure-JS launcher (`bin/run.js`) now:
+1. Uses `dist/index.js` if it exists (after a local build)
+2. Otherwise runs the TypeScript source with `tsx` (works for `npx github:` installs)
+
+No pre-build required to connect the server to an agent.
+
+---
+
+## Tools
 
 | Tool | When to use |
 |------|-------------|
 | `diagnose_test_failure` | First step when a test fails |
 | `propose_minimal_fix` | After diagnosis — forces a tiny, safe patch |
 | `assess_fix_safety` | Before applying any non-trivial fix |
-
-The agent runs the reasoning with **its own model**. TestHeal only supplies the protocol, schemas, and guardrails.
-
----
-
-## Verify it works
-
-In Claude Code:
-```bash
-claude mcp list
-```
-You should see `test-heal`.
-
-Inside a session type `/mcp` and confirm it is connected.
-
-Then ask the agent something like:
-> A test is failing. Use the test-heal tools to diagnose it.
-
----
-
-## Why this design
-
-- **Zero cost** — no API keys, no external model calls
-- **One command** to connect on most agents
-- **Safe by default** — no shell execution, no file writes from the server itself
-- **Open source** (MIT)
-
----
-
-## Development
-
-```bash
-git clone https://github.com/webscout9-png/test-heal.git
-cd test-heal
-npm install
-npm run build
-npm run smoke
-```
 
 ---
 

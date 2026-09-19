@@ -10,41 +10,61 @@ Most coding agents treat test failures as just more text. They guess, invent new
 
 ---
 
-## Why agents need this
+## Quick Start
 
-Common failure modes of coding agents on tests (2025–2026 research):
+### Option A — Run from source (recommended while unpublished)
 
-- Treating symptoms instead of root causes
-- Changing the test instead of the implementation
-- Producing large rewrites instead of surgical fixes
-- Happy-path bias (skipping edge cases and error handling)
-- Inventing files or code that do not exist
-- Getting stuck in infinite fix loops
-- Low-confidence guesses presented as certainty
-
-TestHeal is purpose-built to counteract exactly these behaviors.
-
----
-
-## How it works (Option C)
-
-```
-Agent (Claude Code / Cursor / etc.)
-        │
-        │  calls TestHeal tools
-        ▼
-TestHeal MCP Server
-        │
-        │  returns carefully engineered
-        │  prompts + schemas + next_actions
-        ▼
-Agent uses *its own model* to reason
-        │
-        ▼
-High-quality diagnosis → minimal fix → safety check
+```bash
+git clone https://github.com/webscout9-png/test-heal.git
+cd test-heal
+npm install
+npm run build
 ```
 
-**You never pay any API cost.**
+Then point your agent at it:
+
+```json
+{
+  "mcpServers": {
+    "test-heal": {
+      "command": "node",
+      "args": ["/absolute/path/to/test-heal/dist/index.js"]
+    }
+  }
+}
+```
+
+Or use the dev entry:
+
+```json
+{
+  "mcpServers": {
+    "test-heal": {
+      "command": "npx",
+      "args": ["tsx", "/absolute/path/to/test-heal/src/index.ts"]
+    }
+  }
+}
+```
+
+### Option B — After publishing to npm
+
+```bash
+npx -y @test-heal/mcp-server
+```
+
+```json
+{
+  "mcpServers": {
+    "test-heal": {
+      "command": "npx",
+      "args": ["-y", "@test-heal/mcp-server"]
+    }
+  }
+}
+```
+
+No environment variables or API keys required.
 
 ---
 
@@ -64,44 +84,18 @@ Forces the smallest possible high-confidence patch.
 
 ### 3. `assess_fix_safety`
 Use before applying any non-trivial patch.  
-Do **not** skip this for changes that touch shared logic.
+Do **not** skip this step for changes that touch shared logic.
 
 ---
 
-## Key design features (v0.3)
-
-- **Strong tool descriptions** — clear when / when-not guidance
-- **Agent directives** — every response includes `next_actions`
-- **Framework-specific hints** — Jest, Vitest, pytest, etc.
-- **Anti-pattern guards** — against changing tests, oversized rewrites, inventing code
-- **Confidence gating** — honest confidence + recovery paths
-- **STOP conditions** — explicit scope limits in the fix protocol
-- **Zero external AI calls** — no API keys ever
-
----
-
-## Quick Start
+## Verify it works
 
 ```bash
-npx -y @test-heal/mcp-server
+npm install
+npm run smoke
 ```
 
-### Claude Code / Claude Desktop
-```json
-{
-  "mcpServers": {
-    "test-heal": {
-      "command": "npx",
-      "args": ["-y", "@test-heal/mcp-server"]
-    }
-  }
-}
-```
-
-### Cursor
-Settings → MCP → add the same config.
-
-No environment variables or API keys required.
+You should see `✅ Smoke test passed`.
 
 ---
 
@@ -109,23 +103,11 @@ No environment variables or API keys required.
 
 1. Minimalism first
 2. Honesty about confidence
-3. Agent-first UX (next_actions, clear schemas)
+3. Agent-first UX (`next_actions`, clear schemas)
 4. Zero cost
 5. Safety by default
 6. Transparency
 7. Open source (MIT)
-
----
-
-## Development
-
-```bash
-git clone https://github.com/webscout9-png/test-heal.git
-cd test-heal
-npm install
-npm run build
-npm start
-```
 
 ---
 

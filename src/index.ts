@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * TestHeal MCP Server — Option C (Agent-side intelligence) v0.3
+ * TestHeal MCP Server — Option C (Agent-side intelligence) v0.3.1
  *
  * Gives AI coding agents a disciplined protocol for diagnosing
  * and fixing failing tests. TestHeal itself never calls any LLM.
@@ -31,7 +31,7 @@ import { proposeMinimalFix } from "./tools/propose-fix.js";
 import { assessFixSafety } from "./tools/assess-safety.js";
 
 const SERVER_NAME = "test-heal";
-const SERVER_VERSION = "0.3.0";
+const SERVER_VERSION = "0.3.1";
 
 const server = new Server(
   {
@@ -44,6 +44,14 @@ const server = new Server(
     },
   }
 );
+
+/** Convert Zod schema to a clean JSON Schema suitable for MCP tools */
+function toMcpSchema(schema: Parameters<typeof zodToJsonSchema>[0]) {
+  return zodToJsonSchema(schema, {
+    $refStrategy: "none",
+    target: "jsonSchema7",
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Tool definitions — written for LLM selection accuracy
@@ -59,7 +67,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "Use when a test has failed and you do not yet have a high-confidence root cause. " +
           "Do NOT use when you already know the exact root cause, or when you only need to apply an already-diagnosed fix. " +
           "Returns a complete reasoning package (system prompt + context + required JSON schema) that you must execute with your own model, plus recommended next_actions.",
-        inputSchema: zodToJsonSchema(DiagnoseInputSchema),
+        inputSchema: toMcpSchema(DiagnoseInputSchema),
       },
       {
         name: "propose_minimal_fix",
@@ -68,7 +76,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "Use after diagnose_test_failure, or when the root cause is already clear. " +
           "Do NOT use to rewrite large sections of code, to change public APIs, or to modify tests unless the test itself is clearly wrong. " +
           "Returns a reasoning package that forces surgical edits. Prefer calling assess_fix_safety afterwards.",
-        inputSchema: zodToJsonSchema(ProposeFixInputSchema),
+        inputSchema: toMcpSchema(ProposeFixInputSchema),
       },
       {
         name: "assess_fix_safety",
@@ -77,7 +85,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "Use before applying any non-trivial fix, especially changes that touch shared logic, multiple files, or core domain behavior. " +
           "Do NOT skip this step for medium or high risk changes. " +
           "Returns a reasoning package for honest risk assessment.",
-        inputSchema: zodToJsonSchema(AssessSafetyInputSchema),
+        inputSchema: toMcpSchema(AssessSafetyInputSchema),
       },
     ],
   };

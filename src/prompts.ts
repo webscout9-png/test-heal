@@ -1,5 +1,5 @@
 /**
- * High-quality reasoning protocols for TestHeal v0.3 (Option C).
+ * High-quality reasoning protocols for TestHeal v0.3.1 (Option C).
  *
  * These prompts are executed by the *host agent* using its own model.
  * They contain strong anti-pattern guards based on known agent failure modes.
@@ -103,6 +103,10 @@ Your job is to evaluate honestly whether a proposed code patch is likely to intr
   "reasoning": "Clear explanation of the risk assessment"
 }`;
 
+function fence(content: string, lang = ""): string {
+  return "```" + lang + "\n" + content + "\n```";
+}
+
 export function buildDiagnoseUserPrompt(input: {
   test_output: string;
   source_files: { path: string; content: string }[];
@@ -112,26 +116,20 @@ export function buildDiagnoseUserPrompt(input: {
   additional_context?: string;
 }): string {
   const filesSection = input.source_files
-    .map((f) => `### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
+    .map((f) => `### File: ${f.path}\n${fence(f.content)}`)
     .join("\n\n");
 
-  return `## Test Failure Output
+  let prompt = `## Test Failure Output\n\n${fence(input.test_output)}\n\n## Relevant Source Files\n\n${filesSection}`;
 
-\`\`\`
-${input.test_output}
-\`\`\`
+  if (input.git_diff) {
+    prompt += `\n\n## Recent Git Diff\n\n${fence(input.git_diff, "diff")}`;
+  }
+  if (input.language) prompt += `\n\nLanguage: ${input.language}`;
+  if (input.framework) prompt += `\nTest framework: ${input.framework}`;
+  if (input.additional_context) prompt += `\nAdditional context: ${input.additional_context}`;
 
-## Relevant Source Files
-
-${filesSection}
-
-${input.git_diff ? `## Recent Git Diff\n\n\`\`\`\n${input.git_diff}\n\`\`\`` : ""}
-
-${input.language ? `Language: ${input.language}` : ""}
-${input.framework ? `Test framework: ${input.framework}` : ""}
-${input.additional_context ? `Additional context: ${input.additional_context}` : ""}
-
-Diagnose the root cause(s) of this test failure following the system protocol.`;
+  prompt += `\n\nDiagnose the root cause(s) of this test failure following the system protocol.`;
+  return prompt;
 }
 
 export function buildProposeFixUserPrompt(input: {
@@ -142,30 +140,29 @@ export function buildProposeFixUserPrompt(input: {
   constraints?: string;
 }): string {
   const filesSection = input.source_files
-    .map((f) => `### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
+    .map((f) => `### File: ${f.path}\n${fence(f.content)}`)
     .join("\n\n");
 
-  const diagnosisSection = input.diagnosis
-    ? `## Prior Diagnosis\n\n\`\`\`json\n${JSON.stringify(input.diagnosis, null, 2)}\n\`\`\``
-    : "";
+  let prompt = `## Test Failure Output\n\n${fence(input.test_output)}`;
 
-  return `## Test Failure Output
+  if (input.diagnosis) {
+    prompt += `\n\n## Prior Diagnosis\n\n${fence(JSON.stringify(input.diagnosis, null, 2), "json")}`;
+  }
 
-\`\`\`
-${input.test_output}
-\`\`\`
+  prompt += `\n\n## Source Files\n\n${filesSection}`;
 
-${diagnosisSection}
+  if (input.constraints) {
+    prompt += `\n\n## Hard Constraints\n${input.constraints}`;
+  }
 
-## Source Files
+  if (input.root_cause_id) {
+    prompt += `\n\nFocus on root cause rank #${input.root_cause_id}.`;
+  } else {
+    prompt += `\n\nFocus on the highest-confidence root cause.`;
+  }
 
-${filesSection}
-
-${input.constraints ? `## Hard Constraints\n${input.constraints}` : ""}
-
-${input.root_cause_id ? `Focus on root cause rank #${input.root_cause_id}.` : "Focus on the highest-confidence root cause."}
-
-Generate the minimal patch that fixes this failure following the system protocol. Respect all STOP CONDITIONS.`;
+  prompt += `\n\nGenerate the minimal patch that fixes this failure following the system protocol. Respect all STOP CONDITIONS.`;
+  return prompt;
 }
 
 export function buildAssessSafetyUserPrompt(input: {
@@ -176,24 +173,19 @@ export function buildAssessSafetyUserPrompt(input: {
   language?: string;
 }): string {
   const filesSection = input.source_files
-    .map((f) => `### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
+    .map((f) => `### File: ${f.path}\n${fence(f.content)}`)
     .join("\n\n");
 
-  return `## Proposed Patch
+  let prompt = `## Proposed Patch\n\n${fence(input.patch, "diff")}\n\n## Surrounding Source Files\n\n${filesSection}`;
 
-\`\`\`diff
-${input.patch}
-\`\`\`
+  if (input.test_output) {
+    prompt += `\n\n## Original Test Failure\n\n${fence(input.test_output)}`;
+  }
+  if (input.diagnosis) {
+    prompt += `\n\n## Prior Diagnosis\n\n${fence(JSON.stringify(input.diagnosis, null, 2), "json")}`;
+  }
+  if (input.language) prompt += `\n\nLanguage: ${input.language}`;
 
-## Surrounding Source Files
-
-${filesSection}
-
-${input.test_output ? `## Original Test Failure\n\n\`\`\`\n${input.test_output}\n\`\`\`` : ""}
-
-${input.diagnosis ? `## Prior Diagnosis\n\n\`\`\`json\n${JSON.stringify(input.diagnosis, null, 2)}\n\`\`\`` : ""}
-
-${input.language ? `Language: ${input.language}` : ""}
-
-Evaluate the safety of this patch following the system protocol.`;
+  prompt += `\n\nEvaluate the safety of this patch following the system protocol.`;
+  return prompt;
 }

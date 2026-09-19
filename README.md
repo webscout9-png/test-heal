@@ -1,18 +1,68 @@
 # TestHeal
 
-**The missing reliability layer for AI coding agents — with zero API cost.**
+**The missing reliability layer for AI coding agents — zero API cost.**
 
-TestHeal is an open-source MCP server that gives Claude Code, Cursor, Gemini CLI, OpenCode, Aider, Continue, and any other agent a **disciplined, high-quality protocol** for diagnosing and fixing failing tests.
-
-Most coding agents treat test failures as just more text. They guess, invent new bugs, make oversized edits, or get stuck in loops. TestHeal forces them to follow a precise, minimal, and safety-conscious reasoning protocol — using **the agent's own model**.
-
-> **Zero cost design**: TestHeal itself never calls any external AI. It only provides expert prompts, strict schemas, structured guidance, and next-action directives. The host agent does the actual thinking with the model it already has.
+Gives Claude Code, Cursor, Gemini CLI, OpenCode and others a disciplined protocol for diagnosing and fixing failing tests. Uses the agent's own model. No API keys. No extra cost.
 
 ---
 
-## Quick Start
+## Easiest ways to connect (pick one)
 
-### Option A — Run from source (recommended while unpublished)
+### 1. Claude Code — one command (easiest)
+
+```bash
+claude mcp add test-heal -- npx -y github:webscout9-png/test-heal
+```
+
+That's it. Restart the session or run `/mcp` to verify.
+
+Remove later:
+```bash
+claude mcp remove test-heal
+```
+
+---
+
+### 2. Any agent — one command with `add-mcp`
+
+Works with Claude Code, Cursor, OpenCode, VS Code, Cline, and many more:
+
+```bash
+npx add-mcp github:webscout9-png/test-heal -y
+```
+
+Or target a specific agent:
+```bash
+npx add-mcp github:webscout9-png/test-heal -a cursor -y
+npx add-mcp github:webscout9-png/test-heal -a claude-code -y
+```
+
+---
+
+### 3. Cursor — one-click style
+
+**Option A (recommended)**  
+Create or edit `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project) and paste:
+
+```json
+{
+  "mcpServers": {
+    "test-heal": {
+      "command": "npx",
+      "args": ["-y", "github:webscout9-png/test-heal"]
+    }
+  }
+}
+```
+
+Restart Cursor. Done.
+
+**Option B**  
+Cursor Settings → MCP → Add new MCP server → use the same command/args above.
+
+---
+
+### 4. From source (if you prefer)
 
 ```bash
 git clone https://github.com/webscout9-png/test-heal.git
@@ -21,8 +71,7 @@ npm install
 npm run build
 ```
 
-Then point your agent at it:
-
+Then point any agent at:
 ```json
 {
   "mcpServers": {
@@ -34,80 +83,55 @@ Then point your agent at it:
 }
 ```
 
-Or use the dev entry:
-
-```json
-{
-  "mcpServers": {
-    "test-heal": {
-      "command": "npx",
-      "args": ["tsx", "/absolute/path/to/test-heal/src/index.ts"]
-    }
-  }
-}
-```
-
-### Option B — After publishing to npm
-
-```bash
-npx -y @test-heal/mcp-server
-```
-
-```json
-{
-  "mcpServers": {
-    "test-heal": {
-      "command": "npx",
-      "args": ["-y", "@test-heal/mcp-server"]
-    }
-  }
-}
-```
-
-No environment variables or API keys required.
-
 ---
 
-## Tools
+## What you get after connecting
 
-### 1. `diagnose_test_failure`
-Use **first** when a test fails.  
-Do **not** use when you already have a high-confidence root cause.
+Three tools the agent can call:
 
-Returns a complete reasoning package + recommended next actions.
+| Tool | When to use |
+|------|-------------|
+| `diagnose_test_failure` | First step when a test fails |
+| `propose_minimal_fix` | After diagnosis — forces a tiny, safe patch |
+| `assess_fix_safety` | Before applying any non-trivial fix |
 
-### 2. `propose_minimal_fix`
-Use after diagnosis (or when the root cause is already clear).  
-Do **not** use to rewrite large sections of code.
-
-Forces the smallest possible high-confidence patch.
-
-### 3. `assess_fix_safety`
-Use before applying any non-trivial patch.  
-Do **not** skip this step for changes that touch shared logic.
+The agent runs the reasoning with **its own model**. TestHeal only supplies the protocol, schemas, and guardrails.
 
 ---
 
 ## Verify it works
 
+In Claude Code:
 ```bash
-npm install
-npm run smoke
+claude mcp list
 ```
+You should see `test-heal`.
 
-You should see `✅ Smoke test passed`.
+Inside a session type `/mcp` and confirm it is connected.
+
+Then ask the agent something like:
+> A test is failing. Use the test-heal tools to diagnose it.
 
 ---
 
-## Design Principles
+## Why this design
 
-1. Minimalism first
-2. Honesty about confidence
-3. Agent-first UX (`next_actions`, clear schemas)
-4. Zero cost
-5. Safety by default
-6. Transparency
-7. Open source (MIT)
+- **Zero cost** — no API keys, no external model calls
+- **One command** to connect on most agents
+- **Safe by default** — no shell execution, no file writes from the server itself
+- **Open source** (MIT)
+
+---
+
+## Development
+
+```bash
+git clone https://github.com/webscout9-png/test-heal.git
+cd test-heal
+npm install
+npm run build
+npm run smoke
+```
 
 ---
 

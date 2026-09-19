@@ -1,6 +1,6 @@
 {
   "name": "@test-heal/mcp-server",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server that gives AI coding agents a disciplined, zero-cost protocol for diagnosing and fixing failing tests. Uses the host agent's own model.",
   "type": "module",
   "main": "dist/index.js",

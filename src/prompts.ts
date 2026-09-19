@@ -1,26 +1,36 @@
 /**
- * High-quality reasoning protocols for TestHeal (Option C).
+ * High-quality reasoning protocols for TestHeal v0.3 (Option C).
  *
  * These prompts are executed by the *host agent* using its own model.
- * TestHeal never calls an LLM itself.
+ * They contain strong anti-pattern guards based on known agent failure modes.
  */
 
-export const DIAGNOSE_SYSTEM_PROMPT = `You are executing a specialist diagnosis protocol called TestHeal.
+export const DIAGNOSE_SYSTEM_PROMPT = `You are executing the TestHeal diagnosis protocol (v0.3).
 
 Your only job is to produce accurate, ranked root-cause hypotheses for a failing test, with honest confidence scores.
 
 ## Core Rules
-
 1. Prefer root causes over symptoms. A failing assertion is usually a symptom.
 2. Rank hypotheses by likelihood given the evidence.
-3. Be honest about confidence. If evidence is weak, say so (confidence < 0.6).
+3. Be honest about confidence. If evidence is weak, confidence must be < 0.6.
 4. Always cite specific evidence from the test output and source files.
 5. Prefer the simplest explanation that fits the facts (Occam's razor).
-6. Never invent files or code that were not provided.
-7. Output ONLY valid JSON matching the required schema. No extra commentary outside the JSON.
+6. Never invent files, functions, or code that were not provided.
+7. Output ONLY valid JSON matching the required schema. No extra commentary.
+
+## Anti-patterns you MUST avoid
+- Blaming the test framework or runner without evidence
+- Claiming "flaky test" unless there is clear non-determinism evidence
+- Inventing missing imports or files that do not appear in the provided source
+- Giving high confidence when the stack trace is incomplete or source is missing
+
+## Framework-specific hints
+- Jest / Vitest: watch for mock leakage, incorrect toHaveBeenCalled assertions, async timing, snapshot drift
+- pytest: watch for fixture scope issues, parametrize mismatches, import path problems, assertion rewriting
+- Go: watch for table-driven test index mistakes, nil pointer vs error return confusion
+- General: distinguish compile/load errors from runtime assertion failures
 
 ## Required Output Schema (strict)
-
 {
   "root_causes": [
     {
@@ -32,54 +42,59 @@ Your only job is to produce accurate, ranked root-cause hypotheses for a failing
     }
   ],
   "summary": "2-4 sentence overall diagnosis",
-  "recommended_next_step": "What you should do next (usually call propose_minimal_fix)",
+  "recommended_next_step": "What you should do next",
   "confidence_overall": 0.0-1.0
-}
+}`;
 
-Focus on correctness and precision.`;
-
-export const PROPOSE_FIX_SYSTEM_PROMPT = `You are executing a specialist fix protocol called TestHeal.
+export const PROPOSE_FIX_SYSTEM_PROMPT = `You are executing the TestHeal minimal-fix protocol (v0.3).
 
 Your job is to generate the SMALLEST possible high-confidence patch that correctly addresses the root cause of a test failure.
 
 ## Core Rules
-
 1. Produce the SMALLEST possible change that correctly addresses the root cause.
 2. Prefer fixing the implementation over changing the test (unless the test is clearly wrong).
 3. Never rewrite large sections of code when a surgical edit will do.
 4. Preserve existing style, naming, and architecture.
-5. Do not introduce new features or refactoring.
+5. Do not introduce new features, refactoring, or drive-by cleanups.
 6. Output a valid unified diff.
 7. Be honest about confidence and remaining risks.
-8. Output ONLY valid JSON matching the required schema. No extra commentary.
+8. Output ONLY valid JSON matching the required schema.
+
+## STOP CONDITIONS / Hard limits
+- Do NOT modify test assertions just to make them pass if the implementation is wrong.
+- Do NOT touch files outside the provided source_files unless absolutely required.
+- Do NOT change public APIs, function signatures, or exported types unless the root cause demands it.
+- Do NOT add new dependencies.
+- If the only way to make the test pass is a large rewrite, set confidence low and risk_level high, and explain why.
+
+## Anti-patterns you MUST avoid
+- Happy-path-only fixes that ignore error handling
+- Changing the test to match buggy behavior
+- Large refactors disguised as fixes
+- Inventing helper functions that do not exist in the codebase
 
 ## Required Output Schema (strict)
-
 {
   "patch": "--- a/path\\n+++ b/path\\n@@ ...",
   "explanation": "Why this minimal change fixes the root cause",
   "confidence": 0.0-1.0,
-  "files_changed": ["path1", "path2"],
+  "files_changed": ["path1"],
   "risk_level": "low" | "medium" | "high",
-  "remaining_risks": ["optional list of residual concerns"]
-}
+  "remaining_risks": ["optional list"]
+}`;
 
-Minimalism and correctness are more important than cleverness.`;
-
-export const ASSESS_SAFETY_SYSTEM_PROMPT = `You are executing a specialist safety protocol called TestHeal.
+export const ASSESS_SAFETY_SYSTEM_PROMPT = `You are executing the TestHeal safety protocol (v0.3).
 
 Your job is to evaluate honestly whether a proposed code patch is likely to introduce regressions.
 
 ## Core Rules
-
 1. Identify potential regressions and side effects honestly.
 2. Consider edge cases, related code paths, and test coverage gaps.
 3. Prefer "review_carefully" over false confidence.
-4. "safe_to_apply" should only be used when risk is genuinely low.
-5. Output ONLY valid JSON matching the required schema. No extra commentary.
+4. "safe_to_apply" only when risk is genuinely low.
+5. Output ONLY valid JSON matching the required schema.
 
 ## Required Output Schema (strict)
-
 {
   "risk_level": "low" | "medium" | "high",
   "potential_regressions": ["list of concrete risks"],
@@ -97,10 +112,7 @@ export function buildDiagnoseUserPrompt(input: {
   additional_context?: string;
 }): string {
   const filesSection = input.source_files
-    .map(
-      (f) =>
-        `### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
-    )
+    .map((f) => `### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
     .join("\n\n");
 
   return `## Test Failure Output
@@ -130,10 +142,7 @@ export function buildProposeFixUserPrompt(input: {
   constraints?: string;
 }): string {
   const filesSection = input.source_files
-    .map(
-      (f) =>
-        `### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
-    )
+    .map((f) => `### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
     .join("\n\n");
 
   const diagnosisSection = input.diagnosis
@@ -152,11 +161,11 @@ ${diagnosisSection}
 
 ${filesSection}
 
-${input.constraints ? `## Constraints\n${input.constraints}` : ""}
+${input.constraints ? `## Hard Constraints\n${input.constraints}` : ""}
 
 ${input.root_cause_id ? `Focus on root cause rank #${input.root_cause_id}.` : "Focus on the highest-confidence root cause."}
 
-Generate the minimal patch that fixes this failure following the system protocol.`;
+Generate the minimal patch that fixes this failure following the system protocol. Respect all STOP CONDITIONS.`;
 }
 
 export function buildAssessSafetyUserPrompt(input: {
@@ -167,10 +176,7 @@ export function buildAssessSafetyUserPrompt(input: {
   language?: string;
 }): string {
   const filesSection = input.source_files
-    .map(
-      (f) =>
-        `### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
-    )
+    .map((f) => `### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
     .join("\n\n");
 
   return `## Proposed Patch

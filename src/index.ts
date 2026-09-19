@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * TestHeal MCP Server — Option C (Agent-side intelligence)
+ * TestHeal MCP Server — Option C (Agent-side intelligence) v0.3
  *
  * Gives AI coding agents a disciplined protocol for diagnosing
  * and fixing failing tests. TestHeal itself never calls any LLM.
- * It only returns carefully engineered prompts, schemas, and
- * instructions that the host agent executes with its own model.
+ * It only returns carefully engineered prompts, schemas,
+ * next_actions, and anti-pattern guards.
  *
  * Zero API cost. Zero external model calls.
  */
@@ -31,7 +31,7 @@ import { proposeMinimalFix } from "./tools/propose-fix.js";
 import { assessFixSafety } from "./tools/assess-safety.js";
 
 const SERVER_NAME = "test-heal";
-const SERVER_VERSION = "0.2.0";
+const SERVER_VERSION = "0.3.0";
 
 const server = new Server(
   {
@@ -46,7 +46,7 @@ const server = new Server(
 );
 
 // ---------------------------------------------------------------------------
-// Tool definitions
+// Tool definitions — written for LLM selection accuracy
 // ---------------------------------------------------------------------------
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -55,25 +55,28 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "diagnose_test_failure",
         description:
-          "Returns a complete reasoning package for diagnosing why a test failed. " +
-          "The package contains a high-quality system prompt, the assembled context, " +
-          "and the exact JSON schema you must produce. " +
-          "Execute the package with your own model. Do not guess from raw test output.",
+          "Tool to perform structured root-cause diagnosis of a failing test. " +
+          "Use when a test has failed and you do not yet have a high-confidence root cause. " +
+          "Do NOT use when you already know the exact root cause, or when you only need to apply an already-diagnosed fix. " +
+          "Returns a complete reasoning package (system prompt + context + required JSON schema) that you must execute with your own model, plus recommended next_actions.",
         inputSchema: zodToJsonSchema(DiagnoseInputSchema),
       },
       {
         name: "propose_minimal_fix",
         description:
-          "Returns a reasoning package for generating the smallest possible high-confidence patch. " +
-          "Strongly biased toward surgical edits. " +
-          "Execute the package with your own model. Prefer calling diagnose_test_failure first.",
+          "Tool to generate the smallest possible high-confidence patch for a diagnosed test failure. " +
+          "Use after diagnose_test_failure, or when the root cause is already clear. " +
+          "Do NOT use to rewrite large sections of code, to change public APIs, or to modify tests unless the test itself is clearly wrong. " +
+          "Returns a reasoning package that forces surgical edits. Prefer calling assess_fix_safety afterwards.",
         inputSchema: zodToJsonSchema(ProposeFixInputSchema),
       },
       {
         name: "assess_fix_safety",
         description:
-          "Returns a reasoning package for evaluating whether a proposed patch is safe. " +
-          "Execute the package with your own model before applying any non-trivial fix.",
+          "Tool to evaluate whether a proposed patch is likely to introduce regressions. " +
+          "Use before applying any non-trivial fix, especially changes that touch shared logic, multiple files, or core domain behavior. " +
+          "Do NOT skip this step for medium or high risk changes. " +
+          "Returns a reasoning package for honest risk assessment.",
         inputSchema: zodToJsonSchema(AssessSafetyInputSchema),
       },
     ],
@@ -95,17 +98,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new McpError(
             ErrorCode.InvalidParams,
             `Invalid input for diagnose_test_failure: ${parsed.error.message}. ` +
-              `Provide valid test_output and at least one source file.`
+              `Required: test_output (full failure text) and source_files (at least the test file + implementation under test). ` +
+              `Example source_files entry: { "path": "src/foo.ts", "content": "...full file content..." }. ` +
+              `Retry with complete context.`
           );
         }
         const result = diagnoseTestFailure(parsed.data);
         return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       }
 
@@ -115,17 +115,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new McpError(
             ErrorCode.InvalidParams,
             `Invalid input for propose_minimal_fix: ${parsed.error.message}. ` +
-              `Call diagnose_test_failure first when possible.`
+              `Provide test_output + source_files. Strongly recommended: pass the diagnosis object from diagnose_test_failure. ` +
+              `Retry with complete context.`
           );
         }
         const result = proposeMinimalFix(parsed.data);
         return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       }
 
@@ -134,42 +130,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!parsed.success) {
           throw new McpError(
             ErrorCode.InvalidParams,
-            `Invalid input for assess_fix_safety: ${parsed.error.message}`
+            `Invalid input for assess_fix_safety: ${parsed.error.message}. ` +
+              `Required: patch (unified diff) and source_files. Optional but useful: diagnosis and original test_output.`
           );
         }
         const result = assessFixSafety(parsed.data);
         return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
       }
 
       default:
         throw new McpError(
           ErrorCode.MethodNotFound,
-          `Unknown tool: ${name}. Available tools: diagnose_test_failure, propose_minimal_fix, assess_fix_safety.`
+          `Unknown tool: ${name}. Available tools: diagnose_test_failure, propose_minimal_fix, assess_fix_safety. ` +
+            `Call diagnose_test_failure first when a test fails.`
         );
     }
   } catch (error) {
-    if (error instanceof McpError) {
-      throw error;
-    }
+    if (error instanceof McpError) throw error;
     const message = error instanceof Error ? error.message : String(error);
     throw new McpError(
       ErrorCode.InternalError,
       `TestHeal error while running ${name}: ${message}. ` +
-        `Retry with complete context (full test output + relevant source files).`
+        `Retry with full test output and the relevant source files. If the problem persists, open an issue at https://github.com/webscout9-png/test-heal/issues.`
     );
   }
 });
-
-// ---------------------------------------------------------------------------
-// Start
-// ---------------------------------------------------------------------------
 
 async function main() {
   const transport = new StdioServerTransport();

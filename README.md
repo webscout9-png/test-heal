@@ -2,29 +2,31 @@
 
 **The missing reliability layer for AI coding agents — with zero API cost.**
 
-TestHeal is an open-source MCP server that gives Claude Code, Cursor, Gemini CLI, OpenCode, Aider, Continue, and any other agent a **disciplined, high-quality process** for diagnosing and fixing failing tests.
+TestHeal is an open-source MCP server that gives Claude Code, Cursor, Gemini CLI, OpenCode, Aider, Continue, and any other agent a **disciplined, high-quality protocol** for diagnosing and fixing failing tests.
 
 Most coding agents treat test failures as just more text. They guess, invent new bugs, make oversized edits, or get stuck in loops. TestHeal forces them to follow a precise, minimal, and safety-conscious reasoning protocol — using **the agent's own model**.
 
-> **Zero cost design**: TestHeal itself never calls any external AI. It only provides expert prompts, strict schemas, and structured guidance. The host agent does the actual thinking with the model it already has.
+> **Zero cost design**: TestHeal itself never calls any external AI. It only provides expert prompts, strict schemas, structured guidance, and next-action directives. The host agent does the actual thinking with the model it already has.
 
 ---
 
-## Why this exists
+## Why agents need this
 
-Current coding agents are excellent at writing code but still weak at:
+Common failure modes of coding agents on tests (2025–2026 research):
 
-- Distinguishing root cause from symptoms
-- Producing *minimal* patches instead of large rewrites
-- Assessing whether a proposed fix is safe
-- Avoiding regression-prone changes
-- Breaking out of infinite fix loops
+- Treating symptoms instead of root causes
+- Changing the test instead of the implementation
+- Producing large rewrites instead of surgical fixes
+- Happy-path bias (skipping edge cases and error handling)
+- Inventing files or code that do not exist
+- Getting stuck in infinite fix loops
+- Low-confidence guesses presented as certainty
 
-TestHeal solves these weaknesses by giving the agent a specialist protocol to follow.
+TestHeal is purpose-built to counteract exactly these behaviors.
 
 ---
 
-## How it works (Option C architecture)
+## How it works (Option C)
 
 ```
 Agent (Claude Code / Cursor / etc.)
@@ -34,47 +36,57 @@ Agent (Claude Code / Cursor / etc.)
 TestHeal MCP Server
         │
         │  returns carefully engineered
-        │  prompts + schemas + instructions
+        │  prompts + schemas + next_actions
         ▼
 Agent uses *its own model* to reason
         │
         ▼
-High-quality diagnosis / minimal fix / safety assessment
+High-quality diagnosis → minimal fix → safety check
 ```
 
-**You never pay any API cost.** The agent already has a powerful model.
+**You never pay any API cost.**
 
 ---
 
-## Features
+## Tools
 
-- **Precise root-cause protocol** — ranked hypotheses with confidence scores
-- **Minimal patch protocol** — strongly biased toward surgical edits
-- **Safety assessment protocol** — honest risk evaluation
-- **Agent-optimized schemas** — clean JSON that LLMs parse reliably
-- **LLM-friendly errors** — every error tells the agent what to do next
-- **Zero external AI calls** — no API keys, no cost, no vendor lock-in
-- **Safe by design** — no arbitrary code execution
+### 1. `diagnose_test_failure`
+Use **first** when a test fails.  
+Do **not** use when you already have a high-confidence root cause.
+
+Returns a complete reasoning package + recommended next actions.
+
+### 2. `propose_minimal_fix`
+Use after diagnosis (or when the root cause is already clear).  
+Do **not** use to rewrite large sections of code.
+
+Forces the smallest possible high-confidence patch.
+
+### 3. `assess_fix_safety`
+Use before applying any non-trivial patch.  
+Do **not** skip this for changes that touch shared logic.
+
+---
+
+## Key design features (v0.3)
+
+- **Strong tool descriptions** — clear when / when-not guidance
+- **Agent directives** — every response includes `next_actions`
+- **Framework-specific hints** — Jest, Vitest, pytest, etc.
+- **Anti-pattern guards** — against changing tests, oversized rewrites, inventing code
+- **Confidence gating** — honest confidence + recovery paths
+- **STOP conditions** — explicit scope limits in the fix protocol
+- **Zero external AI calls** — no API keys ever
 
 ---
 
 ## Quick Start
 
-### 1. Install / Run
-
 ```bash
 npx -y @test-heal/mcp-server
 ```
 
-Or install globally:
-
-```bash
-npm install -g @test-heal/mcp-server
-```
-
-### 2. Add to your agent
-
-#### Claude Code / Claude Desktop
+### Claude Code / Claude Desktop
 ```json
 {
   "mcpServers": {
@@ -86,44 +98,22 @@ npm install -g @test-heal/mcp-server
 }
 ```
 
-#### Cursor
-Settings → MCP → Add the same configuration.
+### Cursor
+Settings → MCP → add the same config.
 
-#### Other agents
-Any client that supports the Model Context Protocol can use it. No environment variables or API keys needed.
-
----
-
-## Tools
-
-### 1. `diagnose_test_failure`
-
-Returns a complete reasoning package the agent should execute with its own model:
-
-- High-quality system prompt focused on root-cause analysis
-- Assembled context (test output + source files + optional diff)
-- Exact JSON schema the agent must produce
-- Clear next-step guidance
-
-### 2. `propose_minimal_fix`
-
-Returns a reasoning package that forces the agent to generate the **smallest possible** high-confidence patch.
-
-### 3. `assess_fix_safety`
-
-Returns a reasoning package for honest risk evaluation before applying any fix.
+No environment variables or API keys required.
 
 ---
 
 ## Design Principles
 
-1. **Minimalism first** — prefer 3-line fixes over 50-line rewrites
-2. **Honesty about confidence** — never claim high confidence when evidence is weak
-3. **Agent-first UX** — every response is structured so an LLM can act on it immediately
-4. **Zero cost** — no external model calls, ever
-5. **Safety by default** — no shell execution, no unrestricted file writes
-6. **Transparency** — the full reasoning protocol is visible and inspectable
-7. **Open source forever** — MIT license
+1. Minimalism first
+2. Honesty about confidence
+3. Agent-first UX (next_actions, clear schemas)
+4. Zero cost
+5. Safety by default
+6. Transparency
+7. Open source (MIT)
 
 ---
 
@@ -139,23 +129,6 @@ npm start
 
 ---
 
-## Contributing
-
-We welcome contributions that improve the quality of the reasoning protocols, add language/framework-specific guidance, or strengthen safety.
-
-High priority areas:
-- Better framework-specific hints (pytest, Jest, Vitest, etc.)
-- Stronger static-analysis flavored guidance
-- Evaluation examples with known good diagnoses
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
----
-
 ## License
 
 MIT
-
----
-
-Built with the belief that AI coding agents deserve better tools for the hardest part of the job — and that those tools should not cost the maintainer (or the user) extra API fees.

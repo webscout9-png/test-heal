@@ -5,21 +5,19 @@ import {
 } from "../prompts.js";
 
 /**
- * diagnose_test_failure (Option C)
- *
- * Returns a complete reasoning package that the host agent
- * must execute with its own model. TestHeal never calls an LLM.
+ * diagnose_test_failure (v0.3)
+ * Returns a complete reasoning package + next_actions for the host agent.
  */
 export function diagnoseTestFailure(input: DiagnoseInput) {
   const userPrompt = buildDiagnoseUserPrompt(input);
 
   return {
     protocol: "test-heal/diagnose",
-    version: "0.2.0",
+    version: "0.3.0",
     instruction:
-      "Execute the following system prompt + user prompt with your own model. " +
-      "Produce ONLY the required JSON output. Do not add extra commentary. " +
-      "After you have the diagnosis, prefer calling propose_minimal_fix next.",
+      "Execute the system_prompt + user_prompt with your own model. " +
+      "Produce ONLY the required JSON. Do not add extra commentary. " +
+      "After you have the diagnosis, follow the next_actions.",
     system_prompt: DIAGNOSE_SYSTEM_PROMPT,
     user_prompt: userPrompt,
     required_output_schema: {
@@ -36,11 +34,22 @@ export function diagnoseTestFailure(input: DiagnoseInput) {
       recommended_next_step: "string",
       confidence_overall: "number (0-1)",
     },
-    notes: [
-      "Prefer root causes over symptoms.",
-      "Be honest about confidence.",
-      "Cite specific evidence.",
-      "Never invent code that was not provided.",
+    next_actions: [
+      {
+        action: "propose_minimal_fix",
+        when: "After you have a clear highest-confidence root cause (confidence_overall >= 0.6)",
+        note: "Pass the diagnosis object you just produced as the 'diagnosis' argument.",
+      },
+      {
+        action: "gather_more_context",
+        when: "If confidence_overall < 0.5 or evidence is weak",
+        note: "Request additional source files, a longer stack trace, or the git diff, then re-call diagnose_test_failure.",
+      },
+    ],
+    anti_patterns_to_avoid: [
+      "Do not invent files or code that were not provided",
+      "Do not blame the test framework without evidence",
+      "Do not give high confidence when context is incomplete",
     ],
   };
 }

@@ -1,26 +1,26 @@
 # Contributing to TestHeal
 
-Thank you for helping make AI coding agents more reliable.
+Thank you for helping make AI coding agents more reliable — without adding extra API costs.
 
-## Philosophy
+## Philosophy (Option C)
 
-TestHeal exists because agents currently suck at the hardest part of the loop: understanding *why* a test failed and producing a *minimal, safe* fix.
+TestHeal does **not** call any external AI.  
+It only provides carefully engineered reasoning protocols (system prompts + schemas + instructions) that the host agent executes with its own model.
 
 Every contribution should strengthen one of these properties:
 
-- **Precision** of root-cause analysis
-- **Minimality** of proposed patches
-- **Honesty** of confidence and risk scores
-- **Safety** of the tool itself
+- **Precision** of the diagnosis protocol
+- **Minimality** bias of the fix protocol
+- **Honesty** of the safety protocol
 - **Clarity** of the agent-facing contract
+- **Zero-cost** nature of the tool
 
 ## High-priority areas
 
-1. **Real LLM integration** — clean adapters for OpenAI, Anthropic, Google, local models (Ollama, LM Studio, vLLM)
-2. **Static analysis hooks** — TypeScript compiler diagnostics, ESLint, mypy, go vet, etc.
-3. **Evaluation harness** — a suite of real failing tests with known correct root causes and minimal fixes
-4. **More frameworks** — better built-in understanding of pytest, Jest, Vitest, JUnit, Go testing, etc.
-5. **Historical pattern matching** — learning from past failures in a repository
+1. Better framework-specific guidance (pytest, Jest, Vitest, JUnit, Go testing, etc.)
+2. Stronger static-analysis flavored hints inside the prompts
+3. Example reasoning packages with known-good outputs
+4. Clearer instructions that help agents follow the protocol more reliably
 
 ## Development setup
 
@@ -34,14 +34,9 @@ npm run dev
 ## Pull request guidelines
 
 - Keep changes focused
-- Prefer improving the core diagnosis/fix quality over adding many new tools
-- Update schemas and prompts carefully — agents depend on them
-- Add tests when possible
-- Document any new environment variables or configuration
-
-## Code of conduct
-
-Be kind. We are building infrastructure that many agents (and therefore many developers) will rely on. Quality and safety matter more than speed.
+- Prefer improving the quality of the prompts and schemas
+- Never introduce external LLM calls or API key requirements
+- Document any new guidance clearly
 
 ## License
 

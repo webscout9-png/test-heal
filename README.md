@@ -1,12 +1,12 @@
 # TestHeal
 
-**The missing reliability layer for AI coding agents.**
+**The missing reliability layer for AI coding agents — with zero API cost.**
 
-TestHeal is an open-source MCP server that gives Claude Code, Cursor, Gemini CLI, OpenCode, Aider, Continue, and any other agent **reliable root-cause diagnosis and minimal, high-confidence fixes** for failing tests.
+TestHeal is an open-source MCP server that gives Claude Code, Cursor, Gemini CLI, OpenCode, Aider, Continue, and any other agent a **disciplined, high-quality process** for diagnosing and fixing failing tests.
 
-Most coding agents treat test failures as just more text. They guess, invent new bugs, make oversized edits, or get stuck in loops. TestHeal is a specialized tool they can call to do the hard diagnostic work properly.
+Most coding agents treat test failures as just more text. They guess, invent new bugs, make oversized edits, or get stuck in loops. TestHeal forces them to follow a precise, minimal, and safety-conscious reasoning protocol — using **the agent's own model**.
 
-> **Responsibility notice**: This tool is designed to *assist* agents, not replace human judgment. Every fix it proposes should still be reviewed. We take the responsibility of shipping high-quality, safe defaults extremely seriously.
+> **Zero cost design**: TestHeal itself never calls any external AI. It only provides expert prompts, strict schemas, and structured guidance. The host agent does the actual thinking with the model it already has.
 
 ---
 
@@ -20,150 +20,110 @@ Current coding agents are excellent at writing code but still weak at:
 - Avoiding regression-prone changes
 - Breaking out of infinite fix loops
 
-TestHeal is purpose-built to solve exactly these weaknesses.
+TestHeal solves these weaknesses by giving the agent a specialist protocol to follow.
+
+---
+
+## How it works (Option C architecture)
+
+```
+Agent (Claude Code / Cursor / etc.)
+        │
+        │  calls TestHeal tools
+        ▼
+TestHeal MCP Server
+        │
+        │  returns carefully engineered
+        │  prompts + schemas + instructions
+        ▼
+Agent uses *its own model* to reason
+        │
+        ▼
+High-quality diagnosis / minimal fix / safety assessment
+```
+
+**You never pay any API cost.** The agent already has a powerful model.
 
 ---
 
 ## Features
 
-- **Precise root-cause analysis** — ranked hypotheses with confidence scores
-- **Minimal patches** — unified diffs that change as little as possible
-- **Safety assessment** — risk of regressions + which other tests may be affected
+- **Precise root-cause protocol** — ranked hypotheses with confidence scores
+- **Minimal patch protocol** — strongly biased toward surgical edits
+- **Safety assessment protocol** — honest risk evaluation
 - **Agent-optimized schemas** — clean JSON that LLMs parse reliably
-- **LLM-friendly errors** — every error message tells the agent what to do next
-- **Works with any model** — you bring your own LLM (OpenAI, Anthropic, local, etc.)
-- **Zero arbitrary code execution by default** — safe by design
+- **LLM-friendly errors** — every error tells the agent what to do next
+- **Zero external AI calls** — no API keys, no cost, no vendor lock-in
+- **Safe by design** — no arbitrary code execution
 
 ---
 
 ## Quick Start
 
-### 1. Install
+### 1. Install / Run
+
+```bash
+npx -y @test-heal/mcp-server
+```
+
+Or install globally:
 
 ```bash
 npm install -g @test-heal/mcp-server
-# or run directly
-npx -y @test-heal/mcp-server
 ```
 
 ### 2. Add to your agent
 
 #### Claude Code / Claude Desktop
-Add to your MCP config:
-
 ```json
 {
   "mcpServers": {
     "test-heal": {
       "command": "npx",
-      "args": ["-y", "@test-heal/mcp-server"],
-      "env": {
-        "OPENAI_API_KEY": "your-key-here"   // or ANTHROPIC_API_KEY, etc.
-      }
+      "args": ["-y", "@test-heal/mcp-server"]
     }
   }
 }
 ```
 
 #### Cursor
-Go to Settings → MCP and add the same configuration.
+Settings → MCP → Add the same configuration.
 
-#### Other agents (Gemini CLI, OpenCode, etc.)
-Any client that supports the Model Context Protocol can use it.
+#### Other agents
+Any client that supports the Model Context Protocol can use it. No environment variables or API keys needed.
 
 ---
 
-## Tools Exposed
+## Tools
 
 ### 1. `diagnose_test_failure`
 
-**Purpose**: Deep root-cause analysis of a failing test.
+Returns a complete reasoning package the agent should execute with its own model:
 
-**Input**:
-- `test_output` (string, required) — full failure output / stack trace
-- `source_files` (array of {path, content}) — relevant source code
-- `git_diff` (string, optional) — recent changes
-- `language` (string, optional) — e.g. "typescript", "python"
-- `framework` (string, optional) — e.g. "jest", "pytest", "vitest"
-
-**Output**:
-```json
-{
-  "root_causes": [
-    {
-      "rank": 1,
-      "hypothesis": "...",
-      "confidence": 0.87,
-      "evidence": ["..."],
-      "location": { "file": "...", "lines": "42-48" }
-    }
-  ],
-  "summary": "...",
-  "recommended_next_step": "call propose_minimal_fix with root_cause_id=1"
-}
-```
+- High-quality system prompt focused on root-cause analysis
+- Assembled context (test output + source files + optional diff)
+- Exact JSON schema the agent must produce
+- Clear next-step guidance
 
 ### 2. `propose_minimal_fix`
 
-**Purpose**: Generate the smallest possible safe patch for a diagnosed root cause.
-
-**Input**:
-- Everything from diagnose + `root_cause_id` or full diagnosis object
-
-**Output**:
-```json
-{
-  "patch": "--- a/src/foo.ts\n+++ b/src/foo.ts\n@@ ...",
-  "explanation": "...",
-  "confidence": 0.91,
-  "files_changed": ["src/foo.ts"],
-  "risk_level": "low"
-}
-```
+Returns a reasoning package that forces the agent to generate the **smallest possible** high-confidence patch.
 
 ### 3. `assess_fix_safety`
 
-**Purpose**: Evaluate whether a proposed patch is likely to introduce regressions.
-
-**Output**:
-```json
-{
-  "risk_level": "low" | "medium" | "high",
-  "potential_regressions": ["..."],
-  "affected_tests": ["..."],
-  "recommendation": "safe to apply" | "review carefully" | "do not apply"
-}
-```
+Returns a reasoning package for honest risk evaluation before applying any fix.
 
 ---
 
-## Design Principles (we take this seriously)
+## Design Principles
 
 1. **Minimalism first** — prefer 3-line fixes over 50-line rewrites
 2. **Honesty about confidence** — never claim high confidence when evidence is weak
 3. **Agent-first UX** — every response is structured so an LLM can act on it immediately
-4. **Safety by default** — no shell execution, no unrestricted file writes
-5. **Transparency** — the reasoning is visible and inspectable
-6. **Open source forever** — MIT license, community-driven improvements welcome
-
----
-
-## Architecture
-
-```
-Agent → MCP Protocol → TestHeal Server
-                           │
-                           ├─ Schema validation
-                           ├─ Context assembly
-                           ├─ Specialized diagnosis prompts
-                           ├─ Minimal-edit reasoning
-                           └─ Structured JSON response
-```
-
-The intelligence layer currently uses high-quality prompts + your configured LLM. Future versions will add:
-- Static analysis integration (TypeScript, ESLint, mypy, etc.)
-- Historical failure pattern matching
-- Multi-agent internal debate for higher confidence
+4. **Zero cost** — no external model calls, ever
+5. **Safety by default** — no shell execution, no unrestricted file writes
+6. **Transparency** — the full reasoning protocol is visible and inspectable
+7. **Open source forever** — MIT license
 
 ---
 
@@ -181,13 +141,14 @@ npm start
 
 ## Contributing
 
-We welcome contributions that improve diagnosis accuracy, add language/framework support, or strengthen safety guarantees. See [CONTRIBUTING.md](CONTRIBUTING.md).
+We welcome contributions that improve the quality of the reasoning protocols, add language/framework-specific guidance, or strengthen safety.
 
-**High priority areas**:
-- Better static analysis integration
-- Support for more test frameworks
-- Evaluation harness with real failing tests
-- Local model support (Ollama, LM Studio, etc.)
+High priority areas:
+- Better framework-specific hints (pytest, Jest, Vitest, etc.)
+- Stronger static-analysis flavored guidance
+- Evaluation examples with known good diagnoses
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -197,4 +158,4 @@ MIT
 
 ---
 
-Built with the belief that AI coding agents deserve better tools for the hardest part of the job: **understanding why tests fail and fixing them safely**.
+Built with the belief that AI coding agents deserve better tools for the hardest part of the job — and that those tools should not cost the maintainer (or the user) extra API fees.

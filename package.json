@@ -1,7 +1,7 @@
 {
   "name": "@test-heal/mcp-server",
-  "version": "0.1.0",
-  "description": "MCP server that gives AI coding agents reliable root-cause diagnosis and minimal-fix capabilities for failing tests",
+  "version": "0.2.0",
+  "description": "MCP server that gives AI coding agents a disciplined, zero-cost protocol for diagnosing and fixing failing tests. Uses the host agent's own model.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -22,7 +22,8 @@
     "claude-code",
     "cursor",
     "debugging",
-    "root-cause"
+    "root-cause",
+    "zero-cost"
   ],
   "author": "TestHeal Contributors",
   "license": "MIT",

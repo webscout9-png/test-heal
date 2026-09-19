@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * TestHeal MCP Server
+ * TestHeal MCP Server — Option C (Agent-side intelligence)
  *
- * Gives AI coding agents reliable root-cause diagnosis and
- * minimal-fix capabilities for failing tests.
+ * Gives AI coding agents a disciplined protocol for diagnosing
+ * and fixing failing tests. TestHeal itself never calls any LLM.
+ * It only returns carefully engineered prompts, schemas, and
+ * instructions that the host agent executes with its own model.
  *
- * Designed with extreme care for correctness, safety, and
- * agent-friendly interfaces.
+ * Zero API cost. Zero external model calls.
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -18,7 +19,6 @@ import {
   ErrorCode,
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
-import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
 import {
@@ -31,7 +31,7 @@ import { proposeMinimalFix } from "./tools/propose-fix.js";
 import { assessFixSafety } from "./tools/assess-safety.js";
 
 const SERVER_NAME = "test-heal";
-const SERVER_VERSION = "0.1.0";
+const SERVER_VERSION = "0.2.0";
 
 const server = new Server(
   {
@@ -46,7 +46,7 @@ const server = new Server(
 );
 
 // ---------------------------------------------------------------------------
-// Tool definitions (agent-optimized)
+// Tool definitions
 // ---------------------------------------------------------------------------
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -55,27 +55,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "diagnose_test_failure",
         description:
-          "Perform deep root-cause analysis of a failing test. " +
-          "Returns ranked hypotheses with confidence scores, evidence, and " +
-          "precise locations. Call this first when a test fails. " +
-          "Prefer this over guessing from the raw test output.",
+          "Returns a complete reasoning package for diagnosing why a test failed. " +
+          "The package contains a high-quality system prompt, the assembled context, " +
+          "and the exact JSON schema you must produce. " +
+          "Execute the package with your own model. Do not guess from raw test output.",
         inputSchema: zodToJsonSchema(DiagnoseInputSchema),
       },
       {
         name: "propose_minimal_fix",
         description:
-          "Generate the smallest possible high-confidence patch for a diagnosed " +
-          "root cause. Always prefer minimal edits. Returns a unified diff, " +
-          "explanation, confidence, and risk level. " +
-          "Call diagnose_test_failure first when possible.",
+          "Returns a reasoning package for generating the smallest possible high-confidence patch. " +
+          "Strongly biased toward surgical edits. " +
+          "Execute the package with your own model. Prefer calling diagnose_test_failure first.",
         inputSchema: zodToJsonSchema(ProposeFixInputSchema),
       },
       {
         name: "assess_fix_safety",
         description:
-          "Evaluate whether a proposed patch is likely to introduce regressions. " +
-          "Returns risk level, potential side effects, and a clear recommendation. " +
-          "Use before applying any non-trivial fix.",
+          "Returns a reasoning package for evaluating whether a proposed patch is safe. " +
+          "Execute the package with your own model before applying any non-trivial fix.",
         inputSchema: zodToJsonSchema(AssessSafetyInputSchema),
       },
     ],
@@ -97,10 +95,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new McpError(
             ErrorCode.InvalidParams,
             `Invalid input for diagnose_test_failure: ${parsed.error.message}. ` +
-              `Please provide valid test_output and source_files.`
+              `Provide valid test_output and at least one source file.`
           );
         }
-        const result = await diagnoseTestFailure(parsed.data);
+        const result = diagnoseTestFailure(parsed.data);
         return {
           content: [
             {
@@ -117,10 +115,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new McpError(
             ErrorCode.InvalidParams,
             `Invalid input for propose_minimal_fix: ${parsed.error.message}. ` +
-              `Call diagnose_test_failure first or provide a complete diagnosis.`
+              `Call diagnose_test_failure first when possible.`
           );
         }
-        const result = await proposeMinimalFix(parsed.data);
+        const result = proposeMinimalFix(parsed.data);
         return {
           content: [
             {
@@ -139,7 +137,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             `Invalid input for assess_fix_safety: ${parsed.error.message}`
           );
         }
-        const result = await assessFixSafety(parsed.data);
+        const result = assessFixSafety(parsed.data);
         return {
           content: [
             {
@@ -163,20 +161,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const message = error instanceof Error ? error.message : String(error);
     throw new McpError(
       ErrorCode.InternalError,
-      `TestHeal internal error while running ${name}: ${message}. ` +
-        `Please retry with more complete context (full test output + relevant source files).`
+      `TestHeal error while running ${name}: ${message}. ` +
+        `Retry with complete context (full test output + relevant source files).`
     );
   }
 });
 
 // ---------------------------------------------------------------------------
-// Start server
+// Start
 // ---------------------------------------------------------------------------
 
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`TestHeal MCP server v${SERVER_VERSION} running on stdio`);
+  console.error(`TestHeal MCP server v${SERVER_VERSION} (agent-side intelligence) running on stdio`);
 }
 
 main().catch((error) => {

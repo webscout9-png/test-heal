@@ -1,16 +1,13 @@
 /**
- * High-quality system prompts for TestHeal.
+ * High-quality reasoning protocols for TestHeal (Option C).
  *
- * These prompts are carefully engineered for:
- * - Precise root-cause reasoning
- * - Preference for minimal edits
- * - Honest confidence calibration
- * - Structured, agent-friendly output
+ * These prompts are executed by the *host agent* using its own model.
+ * TestHeal never calls an LLM itself.
  */
 
-export const DIAGNOSE_SYSTEM_PROMPT = `You are TestHeal, a specialist system for diagnosing why software tests fail.
+export const DIAGNOSE_SYSTEM_PROMPT = `You are executing a specialist diagnosis protocol called TestHeal.
 
-Your only job is to produce accurate, ranked root-cause hypotheses with honest confidence scores.
+Your only job is to produce accurate, ranked root-cause hypotheses for a failing test, with honest confidence scores.
 
 ## Core Rules
 
@@ -20,9 +17,9 @@ Your only job is to produce accurate, ranked root-cause hypotheses with honest c
 4. Always cite specific evidence from the test output and source files.
 5. Prefer the simplest explanation that fits the facts (Occam's razor).
 6. Never invent files or code that were not provided.
-7. Output ONLY valid JSON matching the required schema. No extra commentary.
+7. Output ONLY valid JSON matching the required schema. No extra commentary outside the JSON.
 
-## Output Format (strict)
+## Required Output Schema (strict)
 
 {
   "root_causes": [
@@ -35,13 +32,15 @@ Your only job is to produce accurate, ranked root-cause hypotheses with honest c
     }
   ],
   "summary": "2-4 sentence overall diagnosis",
-  "recommended_next_step": "What the agent should do next (usually call propose_minimal_fix)",
+  "recommended_next_step": "What you should do next (usually call propose_minimal_fix)",
   "confidence_overall": 0.0-1.0
 }
 
-Focus on correctness and precision. Agents will trust your analysis heavily.`;
+Focus on correctness and precision.`;
 
-export const PROPOSE_FIX_SYSTEM_PROMPT = `You are TestHeal, a specialist system for generating minimal, high-confidence patches that fix test failures.
+export const PROPOSE_FIX_SYSTEM_PROMPT = `You are executing a specialist fix protocol called TestHeal.
+
+Your job is to generate the SMALLEST possible high-confidence patch that correctly addresses the root cause of a test failure.
 
 ## Core Rules
 
@@ -52,9 +51,9 @@ export const PROPOSE_FIX_SYSTEM_PROMPT = `You are TestHeal, a specialist system 
 5. Do not introduce new features or refactoring.
 6. Output a valid unified diff.
 7. Be honest about confidence and remaining risks.
-8. Output ONLY valid JSON matching the required schema.
+8. Output ONLY valid JSON matching the required schema. No extra commentary.
 
-## Output Format (strict)
+## Required Output Schema (strict)
 
 {
   "patch": "--- a/path\\n+++ b/path\\n@@ ...",
@@ -67,7 +66,9 @@ export const PROPOSE_FIX_SYSTEM_PROMPT = `You are TestHeal, a specialist system 
 
 Minimalism and correctness are more important than cleverness.`;
 
-export const ASSESS_SAFETY_SYSTEM_PROMPT = `You are TestHeal, a specialist system for evaluating the safety of proposed code patches.
+export const ASSESS_SAFETY_SYSTEM_PROMPT = `You are executing a specialist safety protocol called TestHeal.
+
+Your job is to evaluate honestly whether a proposed code patch is likely to introduce regressions.
 
 ## Core Rules
 
@@ -75,9 +76,9 @@ export const ASSESS_SAFETY_SYSTEM_PROMPT = `You are TestHeal, a specialist syste
 2. Consider edge cases, related code paths, and test coverage gaps.
 3. Prefer "review_carefully" over false confidence.
 4. "safe_to_apply" should only be used when risk is genuinely low.
-5. Output ONLY valid JSON matching the required schema.
+5. Output ONLY valid JSON matching the required schema. No extra commentary.
 
-## Output Format (strict)
+## Required Output Schema (strict)
 
 {
   "risk_level": "low" | "medium" | "high",
@@ -118,7 +119,7 @@ ${input.language ? `Language: ${input.language}` : ""}
 ${input.framework ? `Test framework: ${input.framework}` : ""}
 ${input.additional_context ? `Additional context: ${input.additional_context}` : ""}
 
-Diagnose the root cause(s) of this test failure.`;
+Diagnose the root cause(s) of this test failure following the system protocol.`;
 }
 
 export function buildProposeFixUserPrompt(input: {
@@ -155,5 +156,38 @@ ${input.constraints ? `## Constraints\n${input.constraints}` : ""}
 
 ${input.root_cause_id ? `Focus on root cause rank #${input.root_cause_id}.` : "Focus on the highest-confidence root cause."}
 
-Generate the minimal patch that fixes this failure.`;
+Generate the minimal patch that fixes this failure following the system protocol.`;
+}
+
+export function buildAssessSafetyUserPrompt(input: {
+  patch: string;
+  source_files: { path: string; content: string }[];
+  test_output?: string;
+  diagnosis?: any;
+  language?: string;
+}): string {
+  const filesSection = input.source_files
+    .map(
+      (f) =>
+        `### File: ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
+    )
+    .join("\n\n");
+
+  return `## Proposed Patch
+
+\`\`\`diff
+${input.patch}
+\`\`\`
+
+## Surrounding Source Files
+
+${filesSection}
+
+${input.test_output ? `## Original Test Failure\n\n\`\`\`\n${input.test_output}\n\`\`\`` : ""}
+
+${input.diagnosis ? `## Prior Diagnosis\n\n\`\`\`json\n${JSON.stringify(input.diagnosis, null, 2)}\n\`\`\`` : ""}
+
+${input.language ? `Language: ${input.language}` : ""}
+
+Evaluate the safety of this patch following the system protocol.`;
 }
